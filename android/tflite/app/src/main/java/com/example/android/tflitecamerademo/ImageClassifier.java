@@ -35,6 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.gpu.GpuDelegate;
+
 
 /** Classifies images with Tensorflow Lite. */
 public class ImageClassifier {
@@ -94,7 +96,9 @@ public class ImageClassifier {
 
   /** Initializes an {@code ImageClassifier}. */
   ImageClassifier(Activity activity) throws IOException {
-    tflite = new Interpreter(loadModelFile(activity));
+    GpuDelegate delegate = new GpuDelegate();
+    Interpreter.Options options = (new Interpreter.Options()).addDelegate(delegate);
+    tflite = new Interpreter(loadModelFile(activity), options);
     labelList = loadLabelList(activity);
     imgData =
         ByteBuffer.allocateDirect(

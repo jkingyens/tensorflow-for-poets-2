@@ -44,6 +44,7 @@ import android.media.ImageReader;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
 import android.support.v4.content.ContextCompat;
@@ -82,7 +83,7 @@ public class Camera2BasicFragment extends Fragment
   private boolean runClassifier = false;
   private boolean checkedPermissions = false;
   private TextView textView;
-  private ImageClassifier classifier;
+  private static ImageClassifier classifier;
 
   /** Max preview width that is guaranteed by Camera2 API */
   private static final int MAX_PREVIEW_WIDTH = 1920;
@@ -295,13 +296,34 @@ public class Camera2BasicFragment extends Fragment
   @Override
   public void onActivityCreated(Bundle savedInstanceState) {
     super.onActivityCreated(savedInstanceState);
-    try {
-      classifier = new ImageClassifier(getActivity());
-    } catch (IOException e) {
-      Log.e(TAG, "Failed to initialize an image classifier.");
-    }
+
     startBackgroundThread();
   }
+
+  /** Takes photos and classify them periodically. */
+  private Runnable periodicClassify =
+          new Runnable() {
+            @Override
+            public void run() {
+
+              synchronized (lock) {
+
+                  if (classifier == null) {
+                    try {
+                      classifier = new ImageClassifier(getActivity());
+                    } catch (IOException e) {
+                      Log.e(TAG, "Failed to initialize an image classifier.");
+                    }
+                  }
+
+                  if (runClassifier) {
+                    classifyFrame();
+                  }
+              }
+
+              backgroundHandler.post(periodicClassify);
+            }
+          };
 
   @Override
   public void onResume() {
@@ -526,7 +548,7 @@ public class Camera2BasicFragment extends Fragment
   private void startBackgroundThread() {
     backgroundThread = new HandlerThread(HANDLE_THREAD_NAME);
     backgroundThread.start();
-    backgroundHandler = new Handler(backgroundThread.getLooper());
+    backgroundHandler = new Handler(Looper.getMainLooper());
     synchronized (lock) {
       runClassifier = true;
     }
@@ -547,20 +569,6 @@ public class Camera2BasicFragment extends Fragment
       e.printStackTrace();
     }
   }
-
-  /** Takes photos and classify them periodically. */
-  private Runnable periodicClassify =
-      new Runnable() {
-        @Override
-        public void run() {
-          synchronized (lock) {
-            if (runClassifier) {
-              classifyFrame();
-            }
-          }
-          backgroundHandler.post(periodicClassify);
-        }
-      };
 
   /** Creates a new {@link CameraCaptureSession} for camera preview. */
   private void createCameraPreviewSession() {
